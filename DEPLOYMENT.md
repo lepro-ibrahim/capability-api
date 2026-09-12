@@ -6,7 +6,7 @@
 - Node.js: 22.x. Framework: NestJS. Entrypoint: `src/main.ts`.
 - Install: `npm ci`. Build: `npm run build`.
 - Region: Cleveland (`cle1`), near the Neon database in Ohio.
-- The entire API runs as one Vercel function. Chromium's compressed files are included for PDF exports.
+- The entire API runs as one Vercel function. Native NestJS file tracing includes Chromium for PDF exports; do not add a functions pattern for src/main.ts, which Vercel rejects.
 
 Set these variables in the Vercel project's **Production** environment:
 
@@ -15,7 +15,7 @@ Set these variables in the Vercel project's **Production** environment:
 | `DATABASE_URL` | Neon PostgreSQL connection string; use SSL and a pooled connection with a conservative connection limit. |
 | `JWT_SECRET` | A cryptographically random secret, at least 32 characters. |
 | `JWT_EXPIRES` | `2h` |
-| `PUBLIC_BASE_URL` | `https://capability-api-ibrahimabdou771-7900.vercel.app` |
+| `PUBLIC_BASE_URL` | `https://capability-api.vercel.app` |
 | `TZ` | `Europe/Paris` |
 | `GHL_WEBHOOK_SECRET` | A separate random secret, when activating external GHL webhooks. |
 | `CORS_ORIGIN` | Optional list of browser origins. The frontend's `/api` proxy does not require browser CORS. |
@@ -58,4 +58,8 @@ Vercel's filesystem is read-only except for `/tmp`. Optional PDF archives theref
 - The original test suite has unrelated failures from missing service mocks and old fixtures; it is not a deployment acceptance check.
 - Existing full-project lint fails on legacy formatting and typing problems; no broad formatting cleanup was applied.
 - Local PDF execution is blocked by an extraction/chown limitation in the execution container. PDF generation must be checked in the deployed Vercel function.
-- A backend preview deployment was created. Remote build status, environment provisioning, database initialization, administrator creation, and live browser verification are pending authenticated access to the Vercel workspace.
+- Production deployed on 12 September 2026. Neon production now contains 21 tables and 23 completed migration records. The administrator ibrahimabdou771@gmail.com is active.
+- Live login, authenticated identity, dashboard summary, budgets, administrator user listing, prospects board, integrations listing, and PDF generation pass. Anonymous CRM access returns HTTP 401.
+- A marked test lead was created, updated, read back from Neon, then removed. Production contains only the requested administrator and no demonstration leads.
+- Use the primary production API domain https://capability-api.vercel.app. Secondary generated domains can require Vercel authentication.
+- The backend was deployed through Vercel's connected deployment tool. Automatic Git deployments require granting Vercel's GitHub App access to lepro-ibrahim/capability-api; that repository is currently absent from Vercel's import list.
