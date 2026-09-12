@@ -3225,7 +3225,10 @@ export class ReportingService {
     leadCreatedTo?: string,
   ): Promise<number> {
     if (!keys?.length) return 0;
-    const ids = await this.stageIdsForKeys(keys);
+    const stages = keys.filter((key) =>
+      Object.values(LeadStage).includes(key as LeadStage),
+    ) as LeadStage[];
+    if (!stages.length) return 0;
     const leadSourceWhere = buildLeadWhere({
       sourcesCsv,
       sourcesExcludeCsv,
@@ -3233,20 +3236,14 @@ export class ReportingService {
       leadCreatedFrom,
       leadCreatedTo,
     });
-    const where: any = {
-      AND: [
-        {
-          OR: [
-            { stage: { in: keys as any } },
-            ...(ids.length ? [{ stageId: { in: ids } }] : []),
-          ],
-        },
-        between('stageUpdatedAt', r),
-        leadSourceWhere,
-      ],
-    };
-
-    return num(await this.prisma.lead.count({ where }));
+    // The board uses the current stage; funnel totals count first entries.
+    return num(await this.prisma.stageEvent.count({
+      where: {
+        toStage: { in: stages },
+        ...between('occurredAt', r),
+        lead: leadSourceWhere,
+      },
+    }));
   }
 
   /** Compte les leads ACTUELLEMENT dans l’un des stages `keys` (peu importe stageUpdatedAt). */
@@ -3690,56 +3687,14 @@ export class ReportingService {
 
   /* =================== METRICS JOURNALIÈRES BASÉES SUR LES STAGES =================== */
 
-  /** Compte par jour le nombre de leads qui sont ENTRÉS dans l’un des stages `keys` (via stageUpdatedAt). */
+  /** Compte les premières entrées par jour, même après un changement d'étape. */
   private async perDayFromStages(
     keys: string[],
     from?: string,
     to?: string,
     tz = 'Europe/Paris',
   ): Promise<{ total: number; byDay?: Array<{ day: string; count: number }> }> {
-    const ids = await this.stageIdsForKeys(keys);
-
-    if (!from || !to) {
-      const where: any = {
-        OR: [
-          { stage: { in: keys as any } },
-          ...(ids.length ? [{ stageId: { in: ids } }] : []),
-        ],
-      };
-      const total = await this.prisma.lead.count({ where });
-      return { total: num(total), byDay: [] };
-    }
-
-    const rows = await this.prisma.$queryRaw<
-      Array<{ day: string; count: number }>
-    >(Prisma.sql`
-    SELECT
-      to_char(DATE_TRUNC('day', (l."stageUpdatedAt" AT TIME ZONE ${tz})), 'YYYY-MM-DD') AS day,
-      COUNT(*)::int AS count
-    FROM "Lead" l
-    WHERE ( ${Prisma.join(
-      [
-        Prisma.sql`l."stage" = ANY(${Prisma.sql`ARRAY[${Prisma.join(keys.map((k) => Prisma.sql`${k}::"LeadStage"`))}]::"LeadStage"[]`})`,
-        ...(ids.length
-          ? [
-              Prisma.sql`l."stageId" = ANY(${Prisma.sql`ARRAY[${Prisma.join(ids)}]`})`,
-            ]
-          : []),
-      ],
-      ' OR ',
-    )} )
-      AND ${whereLocalDay('stageUpdatedAt', from, to, tz)}
-    GROUP BY 1
-    ORDER BY 1 ASC
-  `);
-
-    const map = new Map(rows.map((r0) => [r0.day, num(r0.count)]));
-    const byDay = daysSpanLocal(from, to).map((d) => ({
-      day: d,
-      count: map.get(d) ?? 0,
-    }));
-    const total = byDay.reduce((s, r0) => s + r0.count, 0);
-    return { total, byDay };
+    return this.perDayFromStageEvents(keys, from, to, tz);
   }
 
   /** Demandes d’appel par jour — basées sur l’entrée en stage CALL_REQUESTED */
