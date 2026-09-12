@@ -246,7 +246,7 @@ export class GhlService {
       const n = Number(value);
       return Number.isFinite(n) ? n : undefined;
     };
-    const saleValueFromPayload = toFiniteNumber(args.saleValue);x
+    const saleValueFromPayload = toFiniteNumber(args.saleValue);
     const amountFromPayload = toFiniteNumber(args.amount);
     const resolvedSaleValue = saleValueFromPayload ?? amountFromPayload;
     const lead = await this.findLeadByEmailOrGhlId(

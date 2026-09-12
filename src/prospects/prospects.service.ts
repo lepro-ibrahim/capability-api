@@ -538,7 +538,6 @@ async putColumnsConfig(payload: Array<{
       ...(setterIds?.length ? { setterId: { in: setterIds } } : {}),
       ...(closerIds?.length ? { closerId: { in: closerIds } } : {}),
     };
-    const where = this.buildRangeOr(from, to);
 
     const leads = await this.prisma.lead.findMany({
       where,

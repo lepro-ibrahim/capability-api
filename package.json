@@ -22,7 +22,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "migrate:deploy": "prisma migrate deploy",
     "postinstall": "prisma generate",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "typecheck": "tsc --noEmit -p tsconfig.build.json"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"
@@ -45,9 +46,10 @@
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pdfkit": "^0.17.2",
-    "puppeteer": "^24.22.1",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "puppeteer-core": "24.43.1",
+    "@sparticuz/chromium": "148.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

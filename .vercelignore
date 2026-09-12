@@ -1,0 +1,16 @@
+.git
+.env*
+dist
+coverage
+storage
+test
+*.tsbuildinfo
+*.html
+*.pdf
+*_report*
+setters_with_prev.json
+seed-admin.*
+src/**/*.spec.ts
+prisma/*.js
+prisma/*.d.ts
+.data

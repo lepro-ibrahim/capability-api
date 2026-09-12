@@ -2,7 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ReportingService } from '../reporting/reporting.service';
 import * as fs from 'fs';
 import * as path from 'path';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
+import type { Browser } from 'puppeteer-core';
 import { Buffer } from 'node:buffer';
 
 function fmt(n: number | null | undefined) {
@@ -143,36 +145,28 @@ export class PdfExportService {
 
   // ---------- helpers ----------
   async htmlToPdfBuffer(html: string): Promise<Buffer> {
+    let browser: Browser | undefined;
     try {
-      // 1) Résout le chemin de Chrome/Chromium
-      const resolvedPath =
-        process.env.PUPPETEER_EXECUTABLE_PATH // prioritaire si défini
-        ?? (typeof (puppeteer as any).executablePath === 'function'
-              ? (puppeteer as any).executablePath()
-              : undefined);
-
-      this.logger.log(`Puppeteer executable: ${resolvedPath ?? 'DEFAULT (none)'}`);
-
-      // 2) Lance le navigateur
-      const browser = await puppeteer.launch({
-        executablePath: resolvedPath,   // peut être undefined → Puppeteer choisit son binaire par défaut
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'],
+      const resolvedPath = process.env.PUPPETEER_EXECUTABLE_PATH ?? await chromium.executablePath();
+      browser = await puppeteer.launch({
+        executablePath: resolvedPath,
+        headless: 'shell',
+        args: chromium.args,
       });
-
       const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: 'networkidle0' });
+      await page.setContent(html, { waitUntil: 'load' });
+      await page.evaluate(() => document.fonts.ready);
       const pdfData = await page.pdf({
         format: 'A4',
         printBackground: true,
         margin: { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' },
       });
-
-      await browser.close();
       return Buffer.from(pdfData);
-    } catch (err: any) {
-      this.logger.error(`Puppeteer PDF error: ${err?.message || err}`);
+    } catch (err: unknown) {
+      this.logger.error(`PDF error: ${err instanceof Error ? err.message : String(err)}`);
       throw err;
+    } finally {
+      await browser?.close();
     }
   }
 
@@ -193,7 +187,7 @@ export class PdfExportService {
     const now = new Date();
     const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const ts = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
-    const baseDir = path.resolve(process.cwd(), 'storage', 'reports', 'setters', ym);
+    const baseDir = path.resolve(process.env.VERCEL ? '/tmp' : process.cwd(), 'storage', 'reports', 'setters', ym);
     this.ensureDir(baseDir);
     const filepath = path.join(baseDir, `report_setters_${ts}.pdf`);
     fs.writeFileSync(filepath, pdf);
@@ -216,7 +210,7 @@ export class PdfExportService {
     const now = new Date();
     const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const ts = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
-    const baseDir = path.resolve(process.cwd(), 'storage', 'reports', 'closers', ym);
+    const baseDir = path.resolve(process.env.VERCEL ? '/tmp' : process.cwd(), 'storage', 'reports', 'closers', ym);
     this.ensureDir(baseDir);
     const filepath = path.join(baseDir, `report_closers_${ts}.pdf`);
     fs.writeFileSync(filepath, pdf);

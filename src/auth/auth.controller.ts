@@ -5,10 +5,13 @@ import { Roles } from './roles.decorator';
 import { RolesGuard } from './roles.guard';
 import { Role } from '@prisma/client';
 
+import { Public } from './public.decorator';
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
+  @Public()
   @Post('login')
   async login(@Body() body: { email: string; password: string }) {
     return this.auth.login(body.email, body.password);

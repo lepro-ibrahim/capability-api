@@ -1,6 +1,9 @@
 // src/integrations/ghl/ghl.controller.ts
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import { GhlService } from './ghl.service';
+
+import { Public } from '../../auth/public.decorator';
+import { WebhookSecretGuard } from '../../auth/webhook-secret.guard';
 
 type GhlWebhookBody = {
   eventId?: string;
@@ -16,6 +19,8 @@ export class GhlController {
    * Endpoint unique pour les webhooks GHL.
    * Idempotent (déduplication via eventId) + routage simple vers le service.
    */
+  @Public()
+  @UseGuards(WebhookSecretGuard)
   @Post('webhook')
   @HttpCode(200)
   async webhook(@Body() body: GhlWebhookBody) {

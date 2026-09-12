@@ -1,10 +1,13 @@
 import { Controller, Headers, Param, Post, Req } from '@nestjs/common';
 import { IntegrationsService } from './integrations.service';
 
+import { Public } from '../auth/public.decorator';
+
 @Controller()
 export class HookController {
   constructor(private readonly svc: IntegrationsService) {}
 
+  @Public()
   @Post('hook/:routeKey')
   async receiveHook(
     @Param('routeKey') routeKey: string,

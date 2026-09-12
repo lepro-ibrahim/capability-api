@@ -4,32 +4,33 @@ import * as bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = 'admin@example.com';
-  const plain = 'Admin123!';
-  const passwordHash = await bcrypt.hash(plain, 10);
-
-  // upsert = crée si n’existe pas, sinon met à jour le hash et isActive
-  const admin = await prisma.user.upsert({
-    where: { email },
-    update: { passwordHash, isActive: true, role: Role.ADMIN, firstName: 'Admin', lastName: 'Demo' },
-    create: {
+  const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.ADMIN_PASSWORD;
+  if (!email || !password || password.length < 16) {
+    throw new Error(
+      'ADMIN_EMAIL and ADMIN_PASSWORD (at least 16 characters) are required',
+    );
+  }
+  const passwordHash = await bcrypt.hash(password, 12);
+  const admin = await prisma.user.create({
+    data: {
       email,
       passwordHash,
-      isActive: true,
       role: Role.ADMIN,
-      firstName: 'Admin',
-      lastName: 'Demo',
+      isActive: true,
+      firstName: process.env.ADMIN_FIRST_NAME || 'Admin',
     },
-    select: { id: true, email: true, isActive: true, role: true },
+    select: { email: true, role: true },
   });
-
-  console.log('✅ Admin seedé :', admin.email, '(password: Admin123!)');
+  console.log('Administrator created:', admin.email);
 }
 
 main()
-  .catch((e) => {
-    console.error('Seed error', e);
-    process.exit(1);
+  .catch((error: unknown) => {
+    console.error(
+      error instanceof Error ? error.message : 'Administrator creation failed',
+    );
+    process.exitCode = 1;
   })
   .finally(async () => {
     await prisma.$disconnect();
