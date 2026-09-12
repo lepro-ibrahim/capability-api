@@ -22,7 +22,10 @@ export class WebhooksService {
   /** ---------- HMAC ---------- */
   private verifySignature(rawBody: string, signature?: string) {
     const secret = process.env.GHL_WEBHOOK_SECRET || '';
-    if (!secret) return; // en dev on n'exige pas
+    if (!secret) {
+      if (process.env.NODE_ENV === 'production') throw new UnauthorizedException('Webhook is not configured');
+      return;
+    }
     if (!signature) throw new UnauthorizedException('Missing signature');
     const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
     if (expected !== signature) throw new UnauthorizedException('Invalid signature');

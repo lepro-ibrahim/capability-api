@@ -1,20 +1,28 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
+import { PrismaService } from '../prisma/prisma.service';
+import { getJwtSecret } from './jwt.config';
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(private readonly prisma: PrismaService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false, // on respecte exp
-      secretOrKey: process.env.JWT_SECRET || 'dev-secret',
+      secretOrKey: getJwtSecret(),
     });
   }
 
-  async validate(payload: any) {
-    // payload = { sub, email, role, iat, exp }
-    return { userId: payload.sub, email: payload.email, role: payload.role };
+  async validate(payload: { sub?: string }) {
+    if (!payload.sub) throw new UnauthorizedException('Invalid credentials');
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, email: true, role: true, isActive: true },
+    });
+    if (!user?.isActive) throw new UnauthorizedException('Invalid credentials');
+    return { sub: user.id, userId: user.id, email: user.email, role: user.role };
   }
   
 }

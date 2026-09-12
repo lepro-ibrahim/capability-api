@@ -7,7 +7,11 @@ import { JwtStrategy } from './jwt.strategy';
 import { PrismaModule } from '../prisma/prisma.module';
 import type { StringValue } from 'ms'; // 👈 important
 
-const jwtSecret = process.env.JWT_SECRET || 'dev-secret';
+import { APP_GUARD } from '@nestjs/core';
+import { JwtAuthGuard } from './jwt-auth.guard';
+import { getJwtSecret } from './jwt.config';
+
+const jwtSecret = getJwtSecret();
 
 // On force le type vers StringValue (format '2h', '10m', '30s', etc.)
 const jwtExpires: StringValue = (process.env.JWT_EXPIRES as StringValue) || '2h';
@@ -24,7 +28,7 @@ const jwtExpires: StringValue = (process.env.JWT_EXPIRES as StringValue) || '2h'
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, { provide: APP_GUARD, useClass: JwtAuthGuard }],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

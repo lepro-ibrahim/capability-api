@@ -4,7 +4,11 @@ import { ValidationPipe } from '@nestjs/common';
 import * as express from 'express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { cors: true });
+  const app = await NestFactory.create(AppModule, { rawBody: true });
+
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN?.split(',').map((origin) => origin.trim()).filter(Boolean) ?? false,
+  });
 
   // JSON pour tout (on ne valide PAS de signature HMAC ici)
   app.use(express.json({ limit: '2mb' }));
@@ -16,6 +20,6 @@ async function bootstrap() {
   validationError: { target: false, value: false },
 }));
 
-  await app.listen(3000);
+  await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();
