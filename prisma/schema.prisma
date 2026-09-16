@@ -40,10 +40,13 @@ model User {
 
   analyticsDashboards AnalyticsDashboard[] @relation("AnalyticsDashboardOwner")
 
+  createdTeamAutomationRules TeamAutomationRule[] @relation("TeamAutomationRuleCreator")
+  assignedTeamTasks          TeamTask[]           @relation("TeamTaskAssignee")
+  teamNotifications          TeamNotification[]
+
   @@index([role, isActive])
   @@index([createdAt])
 }
-
 
 // Prospects entrants — étapes du Kanban Prospects
 model Lead {
@@ -100,6 +103,7 @@ model Lead {
 
   // ✅ Comptage par “entrée de stage” (NOUVEAU)
   stageEvents StageEvent[] @relation("LeadToStageEvent")
+  teamTasks   TeamTask[]
 
   // Indexes existants/ajoutés
   @@index([stage, stageUpdatedAt])
@@ -188,10 +192,10 @@ model Budget {
   monthStart DateTime?
 
   // 🔽 Nouveau : CA encaissé saisi par la comptable
-  caEncaisse Int          @default(0)
+  caEncaisse Int @default(0)
 
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([period, weekStart])
 }
@@ -351,13 +355,13 @@ enum LeadStage {
   CALL_ATTEMPT
   CALL_ANSWERED
   SETTER_NO_SHOW
-  FOLLOW_UP        // Follow up Setter / RV0
+  FOLLOW_UP // Follow up Setter / RV0
   FOLLOW_UP_CLOSER // 🔥 nouveau : Follow up Closer (RV1 / RV2)
 
   RV0_PLANNED
   RV0_HONORED
   RV0_NO_SHOW
-  RV0_POSTPONED 
+  RV0_POSTPONED
   RV0_CANCELED
 
   RV1_PLANNED
@@ -372,13 +376,12 @@ enum LeadStage {
   RV2_POSTPONED
   RV2_CANCELED
 
-
   RV0_NOT_QUALIFIED
   RV1_NOT_QUALIFIED
 
   NOT_QUALIFIED
   LOST
-  CONTRACT_SIGNED   // 👈 nouveau
+  CONTRACT_SIGNED // 👈 nouveau
   WON
 }
 
@@ -408,6 +411,35 @@ enum AutomationStatus {
   ON
 }
 
+enum TeamAutomationStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum TeamAutomationTrigger {
+  LEAD_STAGE_CHANGED
+}
+
+enum TeamAutomationRunStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+enum TeamTaskStatus {
+  TODO
+  DONE
+  CANCELED
+}
+
+enum TeamTaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
 model Automation {
   id          String           @id @default(cuid())
   name        String
@@ -420,6 +452,102 @@ model Automation {
   updatedAt   DateTime         @updatedAt
 
   events AutomationEvent[]
+}
+
+model TeamAutomationRule {
+  id            String                @id @default(cuid())
+  name          String
+  description   String?
+  status        TeamAutomationStatus  @default(ACTIVE)
+  trigger       TeamAutomationTrigger
+  triggerConfig Json
+  actions       Json
+
+  createdById String
+  createdBy   User   @relation("TeamAutomationRuleCreator", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs          TeamAutomationRun[]
+  tasks         TeamTask[]
+  notifications TeamNotification[]
+
+  @@index([status, trigger])
+  @@index([createdById, updatedAt])
+}
+
+model TeamAutomationRun {
+  id         String                  @id @default(cuid())
+  ruleId     String
+  rule       TeamAutomationRule      @relation(fields: [ruleId], references: [id])
+  triggerKey String
+  status     TeamAutomationRunStatus @default(RUNNING)
+  context    Json
+  result     Json?
+  error      String?
+  startedAt  DateTime                @default(now())
+  finishedAt DateTime?
+
+  tasks         TeamTask[]
+  notifications TeamNotification[]
+
+  @@unique([ruleId, triggerKey])
+  @@index([status, startedAt])
+}
+
+model TeamTask {
+  id          String           @id @default(cuid())
+  title       String
+  description String?
+  status      TeamTaskStatus   @default(TODO)
+  priority    TeamTaskPriority @default(NORMAL)
+  dueAt       DateTime?
+  completedAt DateTime?
+  metadata    Json?
+
+  assigneeId String
+  assignee   User   @relation("TeamTaskAssignee", fields: [assigneeId], references: [id])
+
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id])
+
+  ruleId String?
+  rule   TeamAutomationRule? @relation(fields: [ruleId], references: [id])
+
+  runId String?
+  run   TeamAutomationRun? @relation(fields: [runId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([assigneeId, status, dueAt])
+  @@index([leadId, createdAt])
+  @@index([ruleId, createdAt])
+}
+
+model TeamNotification {
+  id       String    @id @default(cuid())
+  title    String
+  message  String
+  type     String    @default("AUTOMATION")
+  link     String?
+  readAt   DateTime?
+  metadata Json?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  ruleId String?
+  rule   TeamAutomationRule? @relation(fields: [ruleId], references: [id])
+
+  runId String?
+  run   TeamAutomationRun? @relation(fields: [runId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt, createdAt])
+  @@index([ruleId, createdAt])
 }
 
 // ===================== MetricConfig (nouveau) =====================
@@ -544,7 +672,7 @@ model StageEvent {
 
   /// 🔥 NOUVEAU : qui a provoqué le changement de stage (optionnel)
   userId String?
-  user   User? @relation(fields: [userId], references: [id])
+  user   User?   @relation(fields: [userId], references: [id])
 
   // 👇 relation nommée qui matche Lead.stageEvents
   lead Lead @relation(name: "LeadToStageEvent", fields: [leadId], references: [id], onDelete: Cascade)
