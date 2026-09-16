@@ -26,6 +26,9 @@ import {
 
 type AuthUser = { userId: string; role: Role; email: string };
 type DateRange = { start: Date; end: Date };
+type ResolvedAnalyticsFilters = AnalyticsQueryFiltersDto & {
+  matchNone?: boolean;
+};
 type SeriesPoint = { date: string; value: number };
 type FunnelSegment = { key: string; label: string; value: number };
 type MetricResult = {
@@ -335,8 +338,8 @@ export class AnalyticsService {
         metricKey: body.metricKey,
         valueFormat: body.valueFormat,
         comparison: body.comparison ?? AnalyticsComparison.PREVIOUS_PERIOD,
+        filters: this.toStoredFilters(body.filters) ?? {},
         layout: { ...body.layout },
-        filters: {},
         sortOrder: body.sortOrder ?? 0,
       },
     });
@@ -365,6 +368,10 @@ export class AnalyticsService {
         metricKey: body.metricKey,
         valueFormat: body.valueFormat,
         comparison: body.comparison,
+        filters:
+          body.filters === undefined
+            ? undefined
+            : this.toStoredFilters(body.filters),
         layout: body.layout ? { ...body.layout } : undefined,
         sortOrder: body.sortOrder,
       },
@@ -390,11 +397,15 @@ export class AnalyticsService {
     };
     const filters = this.scopedFilters(user, body.filters);
     const cache = new Map<string, Promise<MetricResult>>();
-    const computeCached = (key: AnalyticsMetricKey, range: DateRange) => {
-      const cacheKey = `${key}:${range.start.toISOString()}:${range.end.toISOString()}`;
+    const computeCached = (
+      key: AnalyticsMetricKey,
+      range: DateRange,
+      metricFilters: ResolvedAnalyticsFilters,
+    ) => {
+      const cacheKey = `${key}:${range.start.toISOString()}:${range.end.toISOString()}:${this.filtersCacheKey(metricFilters)}`;
       const found = cache.get(cacheKey);
       if (found) return found;
-      const promise = this.computeMetric(key, range, filters);
+      const promise = this.computeMetric(key, range, metricFilters);
       cache.set(cacheKey, promise);
       return promise;
     };
@@ -402,10 +413,11 @@ export class AnalyticsService {
     const rows = await Promise.all(
       body.cards.map(async (card) => {
         this.validateMetricAccess(user, card.metricKey);
-        const value = await computeCached(card.metricKey, current);
+        const cardFilters = this.mergeFilters(filters, card.filters);
+        const value = await computeCached(card.metricKey, current, cardFilters);
         const previousValue =
           card.comparison === AnalyticsComparison.PREVIOUS_PERIOD
-            ? await computeCached(card.metricKey, previous)
+            ? await computeCached(card.metricKey, previous, cardFilters)
             : null;
         const delta =
           previousValue && previousValue.value !== 0
@@ -602,14 +614,21 @@ export class AnalyticsService {
   private scopedFilters(
     user: AuthUser,
     input?: AnalyticsQueryFiltersDto,
-  ): AnalyticsQueryFiltersDto {
-    const filters = { ...input };
-    if (user.role === Role.SETTER) filters.setterIds = [user.userId];
-    if (user.role === Role.CLOSER) filters.closerIds = [user.userId];
+  ): ResolvedAnalyticsFilters {
+    const filters: ResolvedAnalyticsFilters = { ...input };
+    if (user.role === Role.SETTER) {
+      filters.setterIds = [user.userId];
+    }
+    if (user.role === Role.CLOSER) {
+      filters.closerIds = [user.userId];
+    }
     return filters;
   }
 
-  private leadWhere(filters: AnalyticsQueryFiltersDto): Prisma.LeadWhereInput {
+  private leadWhere(filters: ResolvedAnalyticsFilters): Prisma.LeadWhereInput {
+    if (filters.matchNone) {
+      return { id: { equals: "__capability_no_matching_lead__" } };
+    }
     const sourceFilter =
       filters.sources?.length || filters.excludeSources?.length
         ? {
@@ -636,7 +655,7 @@ export class AnalyticsService {
   private async computeMetric(
     key: AnalyticsMetricKey,
     range: DateRange,
-    filters: AnalyticsQueryFiltersDto,
+    filters: ResolvedAnalyticsFilters,
   ): Promise<MetricResult> {
     if (key === AnalyticsMetricKey.PIPELINE_FUNNEL)
       return this.computeFunnel(range, filters);
@@ -746,7 +765,7 @@ export class AnalyticsService {
 
   private async computeFunnel(
     range: DateRange,
-    filters: AnalyticsQueryFiltersDto,
+    filters: ResolvedAnalyticsFilters,
   ): Promise<MetricResult> {
     const definitions: Array<[AnalyticsMetricKey, string]> = [
       [AnalyticsMetricKey.LEADS_RECEIVED, "Leads"],
@@ -776,5 +795,66 @@ export class AnalyticsService {
     return Array.from(buckets.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, value]) => ({ date, value }));
+  }
+
+  private mergeFilters(
+    globalFilters: ResolvedAnalyticsFilters,
+    cardFilters?: AnalyticsQueryFiltersDto,
+  ): ResolvedAnalyticsFilters {
+    if (!cardFilters) return { ...globalFilters };
+
+    const merged: ResolvedAnalyticsFilters = {
+      excludeSources: Array.from(
+        new Set([
+          ...(globalFilters.excludeSources ?? []),
+          ...(cardFilters.excludeSources ?? []),
+        ]),
+      ),
+      matchNone: globalFilters.matchNone,
+    };
+
+    const scopedKeys = ["sources", "setterIds", "closerIds", "tags"] as const;
+
+    for (const key of scopedKeys) {
+      const globalValues = globalFilters[key] ?? [];
+      const cardValues = cardFilters[key] ?? [];
+      if (globalValues.length && cardValues.length) {
+        const allowed = new Set(cardValues);
+        const intersection = globalValues.filter((value) => allowed.has(value));
+        merged[key] = intersection;
+        if (!intersection.length) merged.matchNone = true;
+      } else if (globalValues.length) {
+        merged[key] = [...globalValues];
+      } else if (cardValues.length) {
+        merged[key] = [...cardValues];
+      }
+    }
+
+    return merged;
+  }
+
+  private filtersCacheKey(filters: ResolvedAnalyticsFilters) {
+    const sorted = (values?: string[]) => [...(values ?? [])].sort();
+    return JSON.stringify({
+      sources: sorted(filters.sources),
+      excludeSources: sorted(filters.excludeSources),
+      setterIds: sorted(filters.setterIds),
+      closerIds: sorted(filters.closerIds),
+      tags: sorted(filters.tags),
+      matchNone: Boolean(filters.matchNone),
+    });
+  }
+
+  private toStoredFilters(
+    filters?: AnalyticsQueryFiltersDto,
+  ): Prisma.InputJsonValue | undefined {
+    if (!filters) return undefined;
+    return {
+      sources: filters.sources ?? [],
+      excludeSources: filters.excludeSources ?? [],
+      setterIds: filters.setterIds ?? [],
+      closerIds: filters.closerIds ?? [],
+      tags: filters.tags ?? [],
+    };
   }
 }
