@@ -87,6 +87,33 @@ export class CardLayoutDto {
   h!: number;
 }
 
+export class AnalyticsCardFiltersDto {
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  sources?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  excludeSources?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  setterIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  closerIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+}
+
 export class CreateCardDto {
   @IsString()
   @MaxLength(90)
@@ -113,6 +140,11 @@ export class CreateCardDto {
   @ValidateNested()
   @Type(() => CardLayoutDto)
   layout!: CardLayoutDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AnalyticsCardFiltersDto)
+  filters?: AnalyticsCardFiltersDto;
 
   @IsOptional()
   @IsInt()
@@ -152,6 +184,11 @@ export class UpdateCardDto {
   layout?: CardLayoutDto;
 
   @IsOptional()
+  @ValidateNested()
+  @Type(() => AnalyticsCardFiltersDto)
+  filters?: AnalyticsCardFiltersDto;
+
+  @IsOptional()
   @IsInt()
   sortOrder?: number;
 }
@@ -166,34 +203,14 @@ export class AnalyticsQueryCardDto {
   @IsOptional()
   @IsEnum(AnalyticsComparison)
   comparison?: AnalyticsComparison;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AnalyticsCardFiltersDto)
+  filters?: AnalyticsCardFiltersDto;
 }
 
-export class AnalyticsQueryFiltersDto {
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  sources?: string[];
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  excludeSources?: string[];
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  setterIds?: string[];
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  closerIds?: string[];
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  tags?: string[];
-}
+export class AnalyticsQueryFiltersDto extends AnalyticsCardFiltersDto {}
 
 export class AnalyticsQueryDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
