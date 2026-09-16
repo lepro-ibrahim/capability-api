@@ -19,6 +19,7 @@ import { ProspectsModule } from './prospects/prospects.module';
 import { GhlModule } from './integrations/ghl/ghl.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { MetricsModule } from './modules/metrics/metrics.module'; 
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { MetricsModule } from './modules/metrics/metrics.module';
     GhlModule,
     IntegrationsModule,
     MetricsModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
