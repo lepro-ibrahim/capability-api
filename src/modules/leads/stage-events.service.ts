@@ -1,10 +1,14 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { LeadStage } from '@prisma/client';
+import { Injectable } from "@nestjs/common";
+import { PrismaService } from "../../prisma/prisma.service";
+import { LeadStage } from "@prisma/client";
+import { TeamAutomationsService } from "../../team-automations/team-automations.service";
 
 @Injectable()
 export class StageEventsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly teamAutomations: TeamAutomationsService,
+  ) {}
 
   /**
    * Enregistre le 1er passage d’un lead dans un stage donné.
@@ -36,7 +40,7 @@ export class StageEventsService {
     // 1 event max par (lead, stage) → dedupHash unique
     const dedupHash = `${leadId}|${toStage}`;
 
-    return this.prisma.stageEvent.upsert({
+    const event = await this.prisma.stageEvent.upsert({
       where: { dedupHash },
       update: {}, // ne rien changer : on garde le 1er event
       create: {
@@ -48,7 +52,16 @@ export class StageEventsService {
         externalId: externalId ?? null,
         dedupHash,
       },
-      
     });
+
+    await this.teamAutomations.handleStageChanged({
+      leadId,
+      fromStage,
+      toStage,
+      occurredAt: event.occurredAt,
+      source,
+    });
+
+    return event;
   }
 }
