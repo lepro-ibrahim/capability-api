@@ -69,6 +69,53 @@ describe("AnalyticsService", () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it("combines dashboard and per-card filters without sharing cached results", async () => {
+    const leadFindMany = jest
+      .fn()
+      .mockResolvedValueOnce([{ createdAt: new Date("2026-09-10T10:00:00Z") }])
+      .mockResolvedValueOnce([
+        { createdAt: new Date("2026-09-11T10:00:00Z") },
+        { createdAt: new Date("2026-09-12T10:00:00Z") },
+      ]);
+    const service = new AnalyticsService({
+      lead: { findMany: leadFindMany },
+    } as never);
+
+    const result = await service.query(
+      { userId: "admin-1", role: Role.ADMIN, email: "admin@example.invalid" },
+      {
+        from: "2026-09-08",
+        to: "2026-09-14",
+        filters: {
+          sources: ["DEMO · Meta Ads", "DEMO · Google Ads"],
+        },
+        cards: [
+          {
+            id: "meta-card",
+            metricKey: AnalyticsMetricKey.LEADS_RECEIVED,
+            comparison: AnalyticsComparison.NONE,
+            filters: { sources: ["DEMO · Meta Ads"] },
+          },
+          {
+            id: "google-card",
+            metricKey: AnalyticsMetricKey.LEADS_RECEIVED,
+            comparison: AnalyticsComparison.NONE,
+            filters: { sources: ["DEMO · Google Ads"] },
+          },
+        ],
+      },
+    );
+
+    expect(result.results["meta-card"].value).toBe(1);
+    expect(result.results["google-card"].value).toBe(2);
+    expect(leadFindMany.mock.calls[0][0].where.source).toEqual({
+      in: ["DEMO · Meta Ads"],
+    });
+    expect(leadFindMany.mock.calls[1][0].where.source).toEqual({
+      in: ["DEMO · Google Ads"],
+    });
+  });
+
   it("exposes only server-approved metric definitions", () => {
     const service = new AnalyticsService({} as never);
     const catalog = service.catalog();
