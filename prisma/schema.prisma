@@ -38,6 +38,8 @@ model User {
   // 👇 NOUVELLE RELATION INVERSE
   stageEvents StageEvent[]
 
+  analyticsDashboards AnalyticsDashboard[] @relation("AnalyticsDashboardOwner")
+
   @@index([role, isActive])
   @@index([createdAt])
 }
@@ -564,4 +566,84 @@ model LeadStageHistory {
   // un même lead ne doit être compté qu’une seule fois par stage
   @@unique([leadId, stage], name: "lead_stage_unique")
   @@index([stage, occurredAt], name: "lead_stage_by_stage_date")
+}
+
+enum DashboardVisibility {
+  PERSONAL
+  ORGANIZATION
+}
+
+enum AnalyticsCardType {
+  KPI
+  LINE
+  FUNNEL
+}
+
+enum AnalyticsMetricKey {
+  LEADS_RECEIVED
+  CALL_REQUESTED
+  CALL_ATTEMPT
+  CALL_ANSWERED
+  RV0_PLANNED
+  RV0_HONORED
+  RV1_PLANNED
+  RV1_HONORED
+  CONTRACT_SIGNED
+  WON
+  REVENUE
+  CASH_IN
+  AD_SPEND
+  CLOSING_RATE
+  SHOW_RATE
+  ROAS
+  PIPELINE_FUNNEL
+}
+
+enum AnalyticsValueFormat {
+  NUMBER
+  CURRENCY
+  PERCENTAGE
+}
+
+enum AnalyticsComparison {
+  NONE
+  PREVIOUS_PERIOD
+}
+
+model AnalyticsDashboard {
+  id          String              @id @default(cuid())
+  name        String
+  description String?
+  visibility  DashboardVisibility @default(PERSONAL)
+  roleScope   Role?
+  isDefault   Boolean             @default(false)
+  sortOrder   Int                 @default(0)
+  filters     Json?
+  ownerId     String
+  owner       User                @relation("AnalyticsDashboardOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  cards       AnalyticsCard[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([ownerId, sortOrder])
+  @@index([visibility, roleScope])
+}
+
+model AnalyticsCard {
+  id          String               @id @default(cuid())
+  dashboardId String
+  dashboard   AnalyticsDashboard   @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  title       String
+  subtitle    String?
+  type        AnalyticsCardType    @default(KPI)
+  metricKey   AnalyticsMetricKey
+  valueFormat AnalyticsValueFormat @default(NUMBER)
+  comparison  AnalyticsComparison  @default(PREVIOUS_PERIOD)
+  filters     Json?
+  layout      Json
+  sortOrder   Int                  @default(0)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([dashboardId, sortOrder])
 }
