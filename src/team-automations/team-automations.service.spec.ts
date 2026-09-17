@@ -166,4 +166,87 @@ describe("TeamAutomationsService", () => {
     ).rejects.toThrow("Action de tâche incomplète");
     expect(prisma.teamAutomationRule.create).not.toHaveBeenCalled();
   });
+
+  it("creates a manual task and its notification for an active closer", async () => {
+    const prisma = {
+      user: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: "closer-1",
+          firstName: "Inès",
+          lastName: "Petit",
+          role: Role.CLOSER,
+        }),
+      },
+      teamTask: {
+        create: jest.fn().mockResolvedValue({
+          id: "task-1",
+          title: "Préparer le rendez-vous",
+          priority: TeamTaskPriority.HIGH,
+          dueAt: new Date("2099-09-18T10:00:00.000Z"),
+          assignee: {
+            id: "closer-1",
+            firstName: "Inès",
+            lastName: "Petit",
+            role: Role.CLOSER,
+          },
+          lead: null,
+          rule: null,
+        }),
+      },
+      teamNotification: {
+        create: jest.fn().mockResolvedValue({ id: "notification-1" }),
+      },
+      $transaction: jest.fn(async (callback) => callback(prisma)),
+    };
+    const service = new TeamAutomationsService(prisma as never);
+
+    const task = await service.createManualTask(
+      { userId: "admin-1", email: "admin@example.invalid", role: Role.ADMIN },
+      {
+        title: " Préparer le rendez-vous ",
+        description: "Relire les notes du prospect",
+        assigneeId: "closer-1",
+        priority: TeamTaskPriority.HIGH,
+        dueAt: "2099-09-18T10:00:00.000Z",
+      },
+    );
+
+    expect(task.id).toBe("task-1");
+    expect(prisma.teamTask.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          title: "Préparer le rendez-vous",
+          assigneeId: "closer-1",
+          metadata: expect.objectContaining({
+            source: "MANUAL",
+            createdById: "admin-1",
+          }),
+        }),
+      }),
+    );
+    expect(prisma.teamNotification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: "closer-1",
+        type: "TASK_ASSIGNED",
+        title: "Nouvelle tâche : Préparer le rendez-vous",
+        metadata: expect.objectContaining({ taskId: "task-1" }),
+      }),
+    });
+  });
+
+  it("rejects a manual task assigned to an administrator", async () => {
+    const prisma = {
+      user: { findFirst: jest.fn().mockResolvedValue(null) },
+      $transaction: jest.fn(),
+    };
+    const service = new TeamAutomationsService(prisma as never);
+
+    await expect(
+      service.createManualTask(
+        { userId: "admin-1", email: "admin@example.invalid", role: Role.ADMIN },
+        { title: "Tâche", assigneeId: "admin-2" },
+      ),
+    ).rejects.toThrow("Sélectionnez un closer ou setter actif");
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
 });

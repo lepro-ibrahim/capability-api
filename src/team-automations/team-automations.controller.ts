@@ -13,6 +13,7 @@ import { Role, TeamTaskStatus } from "@prisma/client";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import {
+  CreateManualTeamTaskDto,
   CreateTeamAutomationRuleDto,
   UpdateTeamAutomationRuleDto,
   UpdateTeamTaskDto,
@@ -85,6 +86,16 @@ export class TeamAutomationsController {
       ? status
       : undefined;
     return this.service.listTasks(request.user, safeStatus);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @Post("tasks")
+  createTask(
+    @Req() request: { user: RequestUser },
+    @Body() body: CreateManualTeamTaskDto,
+  ) {
+    return this.service.createManualTask(request.user, body);
   }
 
   @Patch("tasks/:id")
