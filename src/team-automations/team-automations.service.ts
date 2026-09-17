@@ -17,6 +17,7 @@ import {
 import { isIP } from "node:net";
 import { PrismaService } from "../prisma/prisma.service";
 import {
+  CreateManualTeamTaskDto,
   CreateTeamAutomationRuleDto,
   UpdateTeamAutomationRuleDto,
 } from "./dto/team-automation.dto";
@@ -367,6 +368,85 @@ export class TeamAutomationsService {
         },
         rule: { select: { id: true, name: true } },
       },
+    });
+  }
+
+  async createManualTask(user: AuthUser, body: CreateManualTeamTaskDto) {
+    const title = body.title.trim();
+    if (!title)
+      throw new BadRequestException("Le titre de la tâche est requis");
+
+    const assignee = await this.prisma.user.findFirst({
+      where: {
+        id: body.assigneeId,
+        isActive: true,
+        role: { in: [Role.CLOSER, Role.SETTER] },
+      },
+      select: { id: true, firstName: true, lastName: true, role: true },
+    });
+    if (!assignee) {
+      throw new BadRequestException("Sélectionnez un closer ou setter actif");
+    }
+
+    const dueAt = body.dueAt ? new Date(body.dueAt) : null;
+    if (dueAt && dueAt.getTime() <= Date.now()) {
+      throw new BadRequestException("L’échéance doit être dans le futur");
+    }
+
+    const description = body.description?.trim() || null;
+    const message =
+      body.notificationMessage?.trim() ||
+      description ||
+      "Une nouvelle tâche vous a été assignée dans Capability.";
+
+    return this.prisma.$transaction(async (transaction) => {
+      const task = await transaction.teamTask.create({
+        data: {
+          title,
+          description,
+          priority: body.priority ?? TeamTaskPriority.NORMAL,
+          dueAt,
+          assigneeId: assignee.id,
+          metadata: {
+            source: "MANUAL",
+            createdById: user.userId,
+            createdByEmail: user.email,
+          },
+        },
+        include: {
+          assignee: {
+            select: { id: true, firstName: true, lastName: true, role: true },
+          },
+          lead: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              source: true,
+              stage: true,
+            },
+          },
+          rule: { select: { id: true, name: true } },
+        },
+      });
+
+      await transaction.teamNotification.create({
+        data: {
+          userId: assignee.id,
+          title: `Nouvelle tâche : ${title}`,
+          message,
+          type: "TASK_ASSIGNED",
+          link: "/automations",
+          metadata: {
+            taskId: task.id,
+            createdById: user.userId,
+            priority: task.priority,
+            dueAt: task.dueAt?.toISOString() ?? null,
+          },
+        },
+      });
+
+      return task;
     });
   }
 
