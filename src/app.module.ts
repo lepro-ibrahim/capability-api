@@ -22,12 +22,16 @@ import { MetricsModule } from "./modules/metrics/metrics.module";
 import { AnalyticsModule } from "./analytics/analytics.module";
 import { TeamAutomationsModule } from "./team-automations/team-automations.module";
 import { CloserSpaceModule } from "./closer-space/closer-space.module";
+import { IntegrationHubModule } from "./integration-hub/integration-hub.module";
+import { CalendarModule } from "./calendar/calendar.module";
 
 @Module({
   imports: [
     PrismaModule, // ✅ doit être chargé une seule fois au root
     TeamAutomationsModule,
     CloserSpaceModule,
+    IntegrationHubModule,
+    CalendarModule,
     AuthModule,
     UsersModule,
     LeadsModule,

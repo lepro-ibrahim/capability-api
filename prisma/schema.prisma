@@ -48,6 +48,11 @@ model User {
   closerReports       CloserReport[]      @relation("CloserReports")
   closerLedgerEntries CloserLedgerEntry[] @relation("CloserLedgerEntries")
 
+  integrationConnections IntegrationConnection[]
+  integrationOAuthStates IntegrationOAuthState[]
+  bookingEventTypes      BookingEventType[]
+  calendarAvailability   CalendarAvailabilityRule[]
+
   @@index([role, isActive])
   @@index([createdAt])
 }
@@ -152,6 +157,15 @@ model Appointment {
   type        AppointmentType
   status      AppointmentStatus
   scheduledAt DateTime
+  endAt       DateTime?
+  title       String            @default("Rendez-vous")
+  description String?
+  timezone    String            @default("Europe/Paris")
+  attendeeName  String?
+  attendeeEmail String?
+  attendeePhone String?
+  meetingUrl    String?
+  updatedAt     DateTime          @updatedAt
   createdAt   DateTime          @default(now())
 
   // Relations
@@ -163,6 +177,9 @@ model Appointment {
 
   closerReport CloserReport?
 
+  bookingEventTypeId String?
+  bookingEventType   BookingEventType? @relation(fields: [bookingEventTypeId], references: [id], onDelete: SetNull)
+
   @@unique([provider, externalId], name: "provider_externalId")
   @@index([userId, type, scheduledAt])
   @@index([userId, type, status, scheduledAt])
@@ -170,6 +187,93 @@ model Appointment {
   @@index([status, scheduledAt])
   @@index([leadId, type, scheduledAt])
   @@index([leadId, type, status, scheduledAt])
+  @@index([userId, scheduledAt, endAt])
+  @@index([bookingEventTypeId, scheduledAt])
+}
+
+// Connexions externes appartenant à un utilisateur. Une connexion WORKSPACE
+// est créée par un administrateur et peut alimenter toute l'équipe.
+model IntegrationConnection {
+  id                    String   @id @default(cuid())
+  provider              String
+  category              String
+  scope                 String   @default("USER")
+  status                String   @default("CONNECTED")
+  displayName           String?
+  accountEmail          String?
+  externalAccountId     String?
+  config                Json?
+  secretEncrypted       String?
+  refreshTokenEncrypted String?
+  tokenExpiresAt        DateTime?
+  webhookKey            String   @unique
+  lastSyncedAt          DateTime?
+  lastError             String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([provider, status])
+  @@index([scope, status])
+}
+
+model IntegrationOAuthState {
+  id        String   @id @default(cuid())
+  provider  String
+  state     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([provider, expiresAt])
+}
+
+model BookingEventType {
+  id             String          @id @default(cuid())
+  name           String
+  slug           String          @unique
+  description    String?
+  durationMin    Int             @default(45)
+  color          String          @default("#6366f1")
+  appointmentType AppointmentType @default(RV1)
+  locationType   String          @default("GOOGLE_MEET")
+  locationValue  String?
+  bufferBeforeMin Int            @default(0)
+  bufferAfterMin  Int            @default(15)
+  minNoticeHours  Int            @default(12)
+  maxDaysAhead    Int            @default(30)
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  appointments Appointment[]
+
+  @@index([ownerId, isActive])
+}
+
+model CalendarAvailabilityRule {
+  id        String    @id @default(cuid())
+  day       DayOfWeek
+  startTime String
+  endTime   String
+  timezone  String    @default("Europe/Paris")
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day, startTime, endTime])
+  @@index([userId, day, isActive])
 }
 
 // Contrats générés par les closers
@@ -399,6 +503,7 @@ enum AppointmentType {
 }
 
 enum AppointmentStatus {
+  SCHEDULED
   HONORED
   POSTPONED
   CANCELED
