@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Public } from '../auth/public.decorator';
 import { CalendarService } from './calendar.service';
 import {
   CreateBookingEventTypeDto,
@@ -114,11 +115,13 @@ export class CalendarController {
     return this.service.syncGoogle(req.user, start, end, userId);
   }
 
+  @Public()
   @Get('public/:slug')
   publicEventType(@Param('slug') slug: string) {
     return this.service.publicEventType(slug);
   }
 
+  @Public()
   @Get('public/:slug/slots')
   slots(
     @Param('slug') slug: string,
@@ -128,6 +131,7 @@ export class CalendarController {
     return this.service.slots(slug, new Date(from), new Date(to));
   }
 
+  @Public()
   @Post('public/:slug/book')
   book(@Param('slug') slug: string, @Body() dto: PublicBookingDto) {
     return this.service.book(slug, dto);
