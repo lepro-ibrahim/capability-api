@@ -1,10 +1,12 @@
 import {
   TeamAutomationStatus,
   TeamAutomationTrigger,
+  TeamTaskPriority,
   TeamTaskStatus,
 } from "@prisma/client";
 import {
   IsArray,
+  IsDateString,
   IsEnum,
   IsObject,
   IsOptional,
@@ -67,4 +69,32 @@ export class UpdateTeamAutomationRuleDto {
 export class UpdateTeamTaskDto {
   @IsEnum(TeamTaskStatus)
   status!: TeamTaskStatus;
+}
+
+export class CreateManualTeamTaskDto {
+  @IsString()
+  @MaxLength(120)
+  title!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  description?: string;
+
+  @IsString()
+  @MaxLength(64)
+  assigneeId!: string;
+
+  @IsOptional()
+  @IsEnum(TeamTaskPriority)
+  priority?: TeamTaskPriority;
+
+  @IsOptional()
+  @IsDateString()
+  dueAt?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notificationMessage?: string;
 }
