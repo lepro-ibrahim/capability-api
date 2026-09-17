@@ -4,6 +4,8 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { getJwtSecret } from './jwt.config';
+import { AccessTokenPayload, AuthenticatedUser } from './auth.types';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -15,15 +17,71 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub?: string }) {
+  async validate(payload: AccessTokenPayload): Promise<AuthenticatedUser> {
     if (!payload.sub) throw new UnauthorizedException('Invalid credentials');
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, email: true, role: true, isActive: true },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        isActive: true,
+        firstName: true,
+        lastName: true,
+      },
     });
     if (!user?.isActive) throw new UnauthorizedException('Invalid credentials');
-    return { sub: user.id, userId: user.id, email: user.email, role: user.role };
-  }
-  
-}
 
+    if (payload.actorId || payload.impersonationSessionId) {
+      if (!payload.actorId || !payload.impersonationSessionId) {
+        throw new UnauthorizedException('Invalid credentials');
+      }
+      const session = await this.prisma.impersonationSession.findFirst({
+        where: {
+          id: payload.impersonationSessionId,
+          actorId: payload.actorId,
+          targetId: user.id,
+          endedAt: null,
+          actor: { role: Role.ADMIN, isActive: true },
+        },
+        select: {
+          id: true,
+          actor: {
+            select: {
+              id: true,
+              email: true,
+              role: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      });
+      if (!session || session.actor.role !== Role.ADMIN) {
+        throw new UnauthorizedException('Invalid credentials');
+      }
+      return {
+        id: user.id,
+        sub: user.id,
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        impersonation: {
+          sessionId: session.id,
+          actor: {
+            ...session.actor,
+            role: Role.ADMIN,
+          },
+        },
+      };
+    }
+
+    return {
+      id: user.id,
+      sub: user.id,
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    };
+  }
+}

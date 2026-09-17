@@ -53,8 +53,56 @@ model User {
   bookingEventTypes      BookingEventType[]
   calendarAvailability   CalendarAvailabilityRule[]
 
+  impersonationSessionsStarted  ImpersonationSession[]  @relation("ImpersonationActor")
+  impersonationSessionsReceived ImpersonationSession[]  @relation("ImpersonationTarget")
+  impersonationActionsAsActor   ImpersonationAuditLog[] @relation("ImpersonationActionActor")
+  impersonationActionsAsTarget  ImpersonationAuditLog[] @relation("ImpersonationActionTarget")
+
   @@index([role, isActive])
   @@index([createdAt])
+}
+
+// Sessions temporaires ouvertes par un administrateur pour travailler avec
+// exactement les permissions d'un closer ou d'un setter.
+model ImpersonationSession {
+  id        String    @id @default(cuid())
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  actorId String
+  actor   User   @relation("ImpersonationActor", fields: [actorId], references: [id], onDelete: Cascade)
+
+  targetId String
+  target   User   @relation("ImpersonationTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  actions ImpersonationAuditLog[]
+
+  @@index([actorId, startedAt])
+  @@index([targetId, startedAt])
+  @@index([endedAt])
+}
+
+// Journal sans contenu métier sensible : il conserve qui a effectué chaque
+// mutation, au nom de quel utilisateur, sur quelle route et avec quel résultat.
+model ImpersonationAuditLog {
+  id         String   @id @default(cuid())
+  method     String
+  path       String
+  statusCode Int
+  createdAt  DateTime @default(now())
+
+  sessionId String
+  session   ImpersonationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  actorId String
+  actor   User   @relation("ImpersonationActionActor", fields: [actorId], references: [id], onDelete: Cascade)
+
+  targetId String
+  target   User   @relation("ImpersonationActionTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([targetId, createdAt])
 }
 
 // Prospects entrants — étapes du Kanban Prospects
