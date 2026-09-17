@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { Roles } from './roles.decorator';
@@ -6,6 +14,7 @@ import { RolesGuard } from './roles.guard';
 import { Role } from '@prisma/client';
 
 import { Public } from './public.decorator';
+import { AuthenticatedUser } from './auth.types';
 
 @Controller('auth')
 export class AuthController {
@@ -19,18 +28,40 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  async me(@Req() req: any) {
+  me(@Req() req: { user: AuthenticatedUser }) {
     return req.user;
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @Post('impersonation/:userId/start')
+  async startImpersonation(
+    @Req() req: { user: AuthenticatedUser },
+    @Param('userId') userId: string,
+  ) {
+    return this.auth.startImpersonation(req.user.userId, userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('impersonation/stop')
+  async stopImpersonation(@Req() req: { user: AuthenticatedUser }) {
+    return this.auth.stopImpersonation(req.user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Post('create-user')
   async createUser(
-    @Req() req: any,
-    @Body() body: { email: string; password: string; role: Role; firstName?: string; lastName?: string },
+    @Req() req: { user: AuthenticatedUser },
+    @Body()
+    body: {
+      email: string;
+      password: string;
+      role: Role;
+      firstName?: string;
+      lastName?: string;
+    },
   ) {
-    return this.auth.adminCreateUser(req.user.sub, body);
+    return this.auth.adminCreateUser(req.user.userId, body);
   }
-  
 }

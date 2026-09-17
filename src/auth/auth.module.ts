@@ -7,14 +7,16 @@ import { JwtStrategy } from './jwt.strategy';
 import { PrismaModule } from '../prisma/prisma.module';
 import type { StringValue } from 'ms'; // 👈 important
 
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { getJwtSecret } from './jwt.config';
+import { ImpersonationAuditInterceptor } from './impersonation-audit.interceptor';
 
 const jwtSecret = getJwtSecret();
 
 // On force le type vers StringValue (format '2h', '10m', '30s', etc.)
-const jwtExpires: StringValue = (process.env.JWT_EXPIRES as StringValue) || '2h';
+const jwtExpires: StringValue =
+  (process.env.JWT_EXPIRES as StringValue) || '2h';
 
 @Module({
   imports: [
@@ -28,7 +30,12 @@ const jwtExpires: StringValue = (process.env.JWT_EXPIRES as StringValue) || '2h'
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, { provide: APP_GUARD, useClass: JwtAuthGuard }],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_INTERCEPTOR, useClass: ImpersonationAuditInterceptor },
+  ],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}
