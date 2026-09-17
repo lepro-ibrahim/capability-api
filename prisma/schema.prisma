@@ -44,6 +44,10 @@ model User {
   assignedTeamTasks          TeamTask[]           @relation("TeamTaskAssignee")
   teamNotifications          TeamNotification[]
 
+  closerSettings      CloserSettings?
+  closerReports       CloserReport[]      @relation("CloserReports")
+  closerLedgerEntries CloserLedgerEntry[] @relation("CloserLedgerEntries")
+
   @@index([role, isActive])
   @@index([createdAt])
 }
@@ -102,8 +106,10 @@ model Lead {
   boardEvents  LeadBoardEvent[] @relation("LeadToLeadBoardEvent")
 
   // ✅ Comptage par “entrée de stage” (NOUVEAU)
-  stageEvents StageEvent[] @relation("LeadToStageEvent")
-  teamTasks   TeamTask[]
+  stageEvents         StageEvent[]        @relation("LeadToStageEvent")
+  teamTasks           TeamTask[]
+  closerReports       CloserReport[]
+  closerLedgerEntries CloserLedgerEntry[]
 
   // Indexes existants/ajoutés
   @@index([stage, stageUpdatedAt])
@@ -155,6 +161,8 @@ model Appointment {
   userId String?
   user   User?   @relation("UserAppointments", fields: [userId], references: [id])
 
+  closerReport CloserReport?
+
   @@unique([provider, externalId], name: "provider_externalId")
   @@index([userId, type, scheduledAt])
   @@index([userId, type, status, scheduledAt])
@@ -178,6 +186,8 @@ model Contract {
 
   leadId String?
   lead   Lead?   @relation(fields: [leadId], references: [id])
+
+  ledgerEntries CloserLedgerEntry[]
 
   @@index([userId, createdAt])
   @@index([leadId, createdAt])
@@ -309,6 +319,71 @@ model AutomationEvent {
   @@index([payloadHash])
 }
 
+// Paramètres individuels du closer (commission et objectifs à venir).
+model CloserSettings {
+  userId         String   @id
+  commissionRate Float    @default(10)
+  monthlyTarget  Float?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Compte-rendu commercial saisi après un rendez-vous de closing.
+model CloserReport {
+  id           String              @id @default(cuid())
+  outcome      CloserReportOutcome
+  proposalMade Boolean             @default(false)
+  objections   String[]            @default([])
+  notes        String?
+  reportedAt   DateTime            @default(now())
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  closerId String
+  closer   User   @relation("CloserReports", fields: [closerId], references: [id], onDelete: Cascade)
+
+  leadId String
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  appointmentId String?      @unique
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([closerId, reportedAt])
+  @@index([leadId, reportedAt])
+  @@index([outcome, reportedAt])
+}
+
+// Grand livre closer : paiements et remboursements, séparés du CA signé.
+model CloserLedgerEntry {
+  id         String             @id @default(cuid())
+  type       CloserLedgerType
+  status     CloserLedgerStatus
+  amount     Float
+  label      String?
+  sourceKey  String?            @unique
+  occurredAt DateTime           @default(now())
+  dueAt      DateTime?
+  paidAt     DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  closerId String
+  closer   User   @relation("CloserLedgerEntries", fields: [closerId], references: [id], onDelete: Cascade)
+
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  contractId String?
+  contract   Contract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
+
+  @@index([closerId, occurredAt])
+  @@index([closerId, status, dueAt])
+  @@index([contractId, occurredAt])
+  @@index([leadId, occurredAt])
+}
+
 // --- ENUMS ---
 
 enum Role {
@@ -403,6 +478,25 @@ enum CallOutcome {
   BUSY
   VOICEMAIL
   WRONG_NUMBER
+}
+
+enum CloserReportOutcome {
+  FOLLOW_UP
+  WON
+  LOST
+  NOT_QUALIFIED
+}
+
+enum CloserLedgerType {
+  PAYMENT
+  REFUND
+}
+
+enum CloserLedgerStatus {
+  PAID
+  PENDING
+  OVERDUE
+  FAILED
 }
 
 enum AutomationStatus {
