@@ -18,6 +18,10 @@ Set these variables in the Vercel project's **Production** environment:
 | `PUBLIC_BASE_URL` | `https://capability-api.vercel.app` |
 | `TZ` | `Europe/Paris` |
 | `GHL_WEBHOOK_SECRET` | A separate random secret, when activating external GHL webhooks. |
+| `INTEGRATIONS_ENCRYPTION_KEY` | A random secret of at least 32 characters used to encrypt provider tokens. Falls back to `JWT_SECRET` during migration only. |
+| `FRONTEND_URL` | Public frontend URL used after OAuth callbacks. |
+| `GOOGLE_CALENDAR_CLIENT_ID` / `GOOGLE_CALENDAR_CLIENT_SECRET` | Google OAuth application credentials for calendar connections. |
+| `ZOOM_CLIENT_ID` / `ZOOM_CLIENT_SECRET` | Zoom OAuth application credentials for meeting connections. |
 | `CORS_ORIGIN` | Optional list of browser origins. The frontend's `/api` proxy does not require browser CORS. |
 
 Keep secrets in Vercel's environment settings and in ignored local environment files. Never add them to GitHub. Production must not use the development JWT secret. Preview deployments should use a separate Neon branch and separate secrets.
